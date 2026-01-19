@@ -11,10 +11,6 @@
   const videoLeft = document.getElementById("videoLeft");
   /** @type {HTMLVideoElement | null} */
   const videoRight = document.getElementById("videoRight");
-  /** @type {HTMLButtonElement | null} */
-  const halfLeftBtn = document.getElementById("halfLeftBtn");
-  /** @type {HTMLButtonElement | null} */
-  const halfRightBtn = document.getElementById("halfRightBtn");
   /** @type {HTMLDivElement | null} */
   const viewport = document.getElementById("videoViewport");
 
@@ -25,8 +21,6 @@
     !counterText ||
     !videoLeft ||
     !videoRight ||
-    !halfLeftBtn ||
-    !halfRightBtn ||
     !viewport
   ) {
     console.error("初始化失败：缺少必要的 DOM 元素");
@@ -38,6 +32,8 @@
   let currentIndex = -1;
   let isRightHalf = false;
   let syncing = false;
+  let isTransitioning = false;
+  const HALF_FADE_DURATION = 400; // 单次淡入/淡出时长，整体叠化 ~0.8s，更快
 
   /** @param {FileList} fileList */
   function collectVideos(fileList) {
@@ -76,8 +72,9 @@
   function resetHalfState() {
     isRightHalf = false;
     viewport.classList.remove("is-right");
-    halfLeftBtn.classList.add("active");
-    halfRightBtn.classList.remove("active");
+    // 默认显示左半，右半隐藏
+    videoLeft.style.opacity = "1";
+    videoRight.style.opacity = "0";
   }
 
   /** 加载并播放当前索引的视频 */
@@ -98,7 +95,11 @@
     videoLeft.currentTime = 0;
     videoRight.currentTime = 0;
 
-    // 尝试自动播放（静音以提高成功率）
+    // 只使用左声道播放声音，右侧仅用于画面叠化，避免“两个声音”
+    videoLeft.muted = false;
+    videoRight.muted = true;
+
+    // 尝试自动播放
     const p1 = videoLeft.play();
     const p2 = videoRight.play();
     Promise.allSettled([p1, p2]).then((results) => {
@@ -164,34 +165,27 @@
     loadCurrent();
   });
 
-  // 左半
-  halfLeftBtn.addEventListener("click", () => {
-    if (!videoLeft.src) return;
-    isRightHalf = false;
-    viewport.classList.remove("is-right");
-    halfLeftBtn.classList.add("active");
-    halfRightBtn.classList.remove("active");
-  });
-
-  // “裸” -> 右半
-  halfRightBtn.addEventListener("click", () => {
-    if (!videoLeft.src) return;
-    isRightHalf = true;
-    viewport.classList.add("is-right");
-    halfLeftBtn.classList.remove("active");
-    halfRightBtn.classList.add("active");
-  });
-
-  // 点击视频区域也可播放/暂停
+  // 点击视频区域：在默认 / “裸” 之间叠化切换（不负责播放/暂停）
   viewport.addEventListener("click", () => {
-    if (!videoLeft.src) return;
-    const shouldPlay = videoLeft.paused || videoRight.paused;
-    if (shouldPlay) {
-      videoLeft.play();
-      videoRight.play();
+    if (!videoLeft.src || isTransitioning) return;
+    isTransitioning = true;
+
+    if (!isRightHalf) {
+      // 从左半切到右半：先淡入右，再淡出左
+      videoRight.style.opacity = "1";
+      setTimeout(() => {
+        videoLeft.style.opacity = "0";
+        isRightHalf = true;
+        isTransitioning = false;
+      }, HALF_FADE_DURATION);
     } else {
-      videoLeft.pause();
-      videoRight.pause();
+      // 从右半切回左半：先淡入左，再淡出右
+      videoLeft.style.opacity = "1";
+      setTimeout(() => {
+        videoRight.style.opacity = "0";
+        isRightHalf = false;
+        isTransitioning = false;
+      }, HALF_FADE_DURATION);
     }
   });
 
@@ -287,9 +281,9 @@
         if (videoLeft.paused) videoRight.pause();
         else videoRight.play();
       }
-      // 保持音量/静音一致（目前默认静音）
-      videoRight.muted = videoLeft.muted;
-      videoRight.volume = videoLeft.volume;
+      // 右侧完全静音，仅做画面；避免听到两路声音
+      videoRight.muted = true;
+      videoRight.volume = 0;
     } finally {
       syncing = false;
     }
