@@ -162,38 +162,44 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
+  /* 隔离层叠上下文，避免叠化时叠加变暗 */
+  isolation: isolate;
 }
 
 .video-element {
   position: absolute;
   left: 0;
   top: 0;
-  /* 保持“视频宽度=视口宽度的 2 倍”，这样右半切换用 -50% 永远准确 */
+  /* 保持"视频宽度=视口宽度的 2 倍"，这样右半切换用 -50% 永远准确 */
   width: 200%;
   height: 100%;
   object-fit: cover;
-  /* 不要左右滑动动画；切换用叠化 */
-  transition: opacity 3s ease-in-out;
+  /* 叠化加速：约 0.4s */
+  transition: opacity 0.4s ease-in-out;
   background: #020617;
 }
 
 .video-left {
   transform: translateX(0);
   opacity: 1;
+  z-index: 2;
 }
 
 .video-right {
   transform: translateX(-50%);
   opacity: 0;
+  z-index: 1;
 }
 
 /* 右半显示：右层淡入、左层淡出 */
 .video-viewport.is-right .video-right {
   opacity: 1;
+  z-index: 2;
 }
 
 .video-viewport.is-right .video-left {
   opacity: 0;
+  z-index: 1;
 }
 
 .hint {
